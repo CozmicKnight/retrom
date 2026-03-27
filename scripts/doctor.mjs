@@ -366,7 +366,7 @@ checks.push({
   required: false,
   detail: pnpmCheck.ok
     ? pnpmCheck.detail
-    : "Not on PATH. Use `node ./scripts/pnpmw.mjs ...` or run `npm run bootstrap` first.",
+    : "Not on PATH. Use `node ./scripts/nodew.mjs ./scripts/pnpmw.mjs ...` or run `npm run bootstrap` first.",
   fix: "npm run bootstrap",
 });
 
@@ -511,9 +511,9 @@ console.log("");
 console.log("Expected install flow from source:");
 console.log("1. `npm run bootstrap`");
 console.log("2. `npm run doctor`");
-console.log("3. `node ./scripts/pnpmw.mjs nx dev retrom-client-web` for web development");
-console.log("4. `node ./scripts/pnpmw.mjs nx dev retrom-client` for the desktop client");
-console.log("5. `node ./scripts/pnpmw.mjs nx build retrom-client --configuration debug` for a local desktop build");
+console.log("3. `node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx dev retrom-client-web` for web development");
+console.log("4. `node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx dev retrom-client` for the desktop client");
+console.log("5. `node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx build retrom-client --configuration debug` for a local desktop build");
 
 if (isWindows) {
   console.log("");

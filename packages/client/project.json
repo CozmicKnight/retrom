@@ -11,7 +11,7 @@
       "continuous": true,
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "node ./scripts/tauriw.mjs dev --no-watch"
+        "command": "node ./scripts/nodew.mjs ./scripts/tauriw.mjs dev --no-watch"
       }
     },
     "build": {
@@ -19,15 +19,15 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "node ./scripts/tauriw.mjs build"
+        "command": "node ./scripts/nodew.mjs ./scripts/tauriw.mjs build"
       },
       "defaultConfiguration": "release",
       "configurations": {
         "release": {
-          "command": "node ./scripts/tauriw.mjs build --config tauri.build.conf.json"
+          "command": "node ./scripts/nodew.mjs ./scripts/tauriw.mjs build --config tauri.build.conf.json"
         },
         "debug": {
-          "command": "node ./scripts/tauriw.mjs build --debug"
+          "command": "node ./scripts/nodew.mjs ./scripts/tauriw.mjs build --debug"
         }
       }
     }

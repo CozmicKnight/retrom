@@ -160,17 +160,25 @@ export function LibrariesConfig(props: {
           onSubmit={form.handleSubmit(handleSubmit)}
           className="flex flex-col gap-4"
         >
-          <Table className="table-fixed">
+          <Table className="sm:w-auto">
             <TableHeader>
               <TableRow className="hidden sm:table-row">
                 <TableHead>Path</TableHead>
-                <TableHead>Structure</TableHead>
-                {showCustomLibraryColumn ? <TableHead>Library Structure</TableHead> : null}
-                <TableHead>
+                <TableHead className="w-[1%] whitespace-nowrap">
+                  Structure
+                </TableHead>
+                {showCustomLibraryColumn ? (
+                  <TableHead className="w-[1%] whitespace-nowrap">
+                    Library Structure
+                  </TableHead>
+                ) : null}
+                <TableHead className="w-[1%] whitespace-nowrap">
                   Rules <IgnorePatternsTooltip />
                 </TableHead>
-                <TableHead>Smart</TableHead>
-                <TableHead />
+                <TableHead className="w-[1%] whitespace-nowrap text-center">
+                  Smart
+                </TableHead>
+                <TableHead className="w-[1%] whitespace-nowrap" />
               </TableRow>
             </TableHeader>
 
@@ -184,7 +192,7 @@ export function LibrariesConfig(props: {
                       "sm:*:px-4 *:px-0",
                     )}
                   >
-                    <TableCell>
+                    <TableCell className="align-middle">
                       <FormField
                         disabled={library.newly === "removed"}
                         control={form.control}
@@ -192,7 +200,7 @@ export function LibrariesConfig(props: {
                         render={BrowseButton}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[1%] whitespace-nowrap align-middle">
                       <FormField
                         disabled={library.newly === "removed"}
                         control={form.control}
@@ -203,7 +211,7 @@ export function LibrariesConfig(props: {
                       />
                     </TableCell>
                     {showCustomLibraryColumn ? (
-                      <TableCell className="sm:w-[150px]">
+                      <TableCell className="w-[1%] whitespace-nowrap align-middle">
                         <FormField
                           disabled={
                             library.newly === "removed" ||
@@ -220,7 +228,7 @@ export function LibrariesConfig(props: {
                         />
                       </TableCell>
                     ) : null}
-                    <TableCell className="sm:w-[150px]">
+                    <TableCell className="w-[1%] whitespace-nowrap align-middle">
                       <FormField
                         disabled={library.newly === "removed"}
                         control={form.control}
@@ -228,7 +236,7 @@ export function LibrariesConfig(props: {
                         render={IgnorePatternsInput}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="w-[1%] whitespace-nowrap align-middle">
                       <FormField
                         disabled={library.newly === "removed"}
                         control={form.control}
@@ -251,7 +259,7 @@ export function LibrariesConfig(props: {
                         )}
                       />
                     </TableCell>
-                    <TableCell className="text-end">
+                    <TableCell className="w-[1%] whitespace-nowrap text-end align-middle">
                       <Button
                         type="button"
                         size="icon"

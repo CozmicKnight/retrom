@@ -50,14 +50,14 @@ Thank you for considering contributing to Retrom! This document provides a high-
 4. Run the project. This will spawn both the Rust backend service and the React web client.
 
    ```bash
-   node ./scripts/pnpmw.mjs nx dev retrom-client-web
+   node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx dev retrom-client-web
    ```
 
 > [!TIP]
 > On Windows, desktop builds also need the Microsoft C++ build tools and the WebView2 runtime.
 
 > [!TIP]
-> If `pnpm` is not on your `PATH`, use `node ./scripts/pnpmw.mjs ...`. The wrapper sets `COREPACK_HOME` automatically for this repository.
+> If `pnpm` is not on your `PATH`, use `node ./scripts/nodew.mjs ./scripts/pnpmw.mjs ...`. The wrapper sets `COREPACK_HOME` automatically for this repository and can fall back to `node-24` on systems where `node` is older.
 
 ### Using GitHub Copilot CLI
 

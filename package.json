@@ -3,39 +3,39 @@
   "version": "0.7.51",
   "type": "module",
   "scripts": {
-    "bootstrap": "node ./scripts/bootstrap.mjs",
-    "doctor": "node ./scripts/doctor.mjs",
-    "dev:web": "node ./scripts/pnpmw.mjs nx dev retrom-client-web",
-    "dev:desktop": "node ./scripts/pnpmw.mjs nx dev retrom-client",
-    "build:web": "node ./scripts/pnpmw.mjs nx build retrom-client-web",
-    "build:desktop:debug": "node ./scripts/pnpmw.mjs nx build retrom-client --configuration debug",
-    "build:desktop:release": "node ./scripts/pnpmw.mjs nx build retrom-client --configuration release"
+    "bootstrap": "node ./scripts/nodew.mjs ./scripts/bootstrap.mjs",
+    "doctor": "node ./scripts/nodew.mjs ./scripts/doctor.mjs",
+    "dev:web": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx dev retrom-client-web",
+    "dev:desktop": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx dev retrom-client",
+    "build:web": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx build retrom-client-web",
+    "build:desktop:debug": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx build retrom-client --configuration debug",
+    "build:desktop:release": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs nx build retrom-client --configuration release"
   },
   "nx": {
     "targets": {
       "noop": {
         "executor": "nx:run-commands",
         "options": {
-          "command": "node ./scripts/pnpmw.mjs --version"
+          "command": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs --version"
         }
       },
       "template:flatpak": {
         "executor": "nx:run-commands",
         "cache": false,
         "options": {
-          "command": "node ./templates/write-flatpak-manifest.js dist/io.github.jmberesford.Retrom.yml",
+          "command": "node ./scripts/nodew.mjs ./templates/write-flatpak-manifest.js dist/io.github.jmberesford.Retrom.yml",
           "cwd": "{projectRoot}"
         }
       },
       "markdownlint:lint": {
         "executor": "nx:run-commands",
         "options": {
-          "command": "node ./scripts/pnpmw.mjs markdownlint-cli2 '**/*.md' '#**/node_modules' '#**/dist' '#**/target' --fix",
+          "command": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs markdownlint-cli2 '**/*.md' '#**/node_modules' '#**/dist' '#**/target' --fix",
           "cwd": "{projectRoot}"
         },
         "configurations": {
           "check": {
-            "command": "node ./scripts/pnpmw.mjs markdownlint-cli2 '**/*.md' '#**/node_modules' '#**/dist' '#**/target'"
+            "command": "node ./scripts/nodew.mjs ./scripts/pnpmw.mjs markdownlint-cli2 '**/*.md' '#**/node_modules' '#**/dist' '#**/target'"
           }
         }
       }

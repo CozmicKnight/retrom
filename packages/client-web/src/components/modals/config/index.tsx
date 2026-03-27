@@ -35,7 +35,7 @@ export function ConfigModal() {
         }
       }}
     >
-      <DialogContent className="h-[92dvh] w-[calc(100dvw-1rem)] max-w-none gap-0 overflow-hidden p-0 sm:w-[min(80rem,calc(100dvw-3rem))]">
+      <DialogContent className="h-[92dvh] w-[calc(100dvw-1rem)] max-w-none gap-0 overflow-hidden p-0 sm:w-[min(68rem,calc(100dvw-3rem))]">
         <DialogHeader className="mb-0 border-b px-6 pt-6 pb-4">
           <DialogTitle>Retrom Configuration</DialogTitle>
 

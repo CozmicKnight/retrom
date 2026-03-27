@@ -62,7 +62,7 @@ export function IgnorePatternsInput<
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="w-full"
+              className="w-full sm:w-auto sm:min-w-24"
               disabled={field.disabled}
             >
               {field.value.length

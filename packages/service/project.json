@@ -11,7 +11,7 @@
       "continuous": true,
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "node ./scripts/cargow.mjs run -p retrom-service"
+        "command": "node ./scripts/nodew.mjs ./scripts/cargow.mjs run -p retrom-service"
       }
     }
   }

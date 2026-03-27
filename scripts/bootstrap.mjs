@@ -59,4 +59,4 @@ console.log("JavaScript dependencies installed.");
 console.log("Run `npm run doctor` next to verify the remaining native prerequisites.");
 console.log("");
 console.log("Use pnpm through the repo wrapper with:");
-console.log("node ./scripts/pnpmw.mjs <command>");
+console.log("node ./scripts/nodew.mjs ./scripts/pnpmw.mjs <command>");
