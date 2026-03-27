@@ -220,6 +220,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ".retrom",
             "#[serde(rename_all(serialize = \"camelCase\", deserialize = \"camelCase\"))]",
         )
+        .message_attribute("retrom.ConnectionConfig", "#[serde(default)]")
+        .message_attribute("retrom.IgnorePatterns", "#[serde(default)]")
+        .message_attribute("retrom.CustomLibraryDefinition", "#[serde(default)]")
+        .message_attribute("retrom.ContentDirectory", "#[serde(default)]")
+        .message_attribute("retrom.IGDBConfig", "#[serde(default)]")
+        .message_attribute("retrom.SteamConfig", "#[serde(default)]")
+        .message_attribute("retrom.SavesConfig", "#[serde(default)]")
+        .message_attribute("retrom.MetadataConfig", "#[serde(default)]")
+        .message_attribute("retrom.MetadataConfig.OptimizationConfig", "#[serde(default)]")
+        .message_attribute("retrom.ServerConfig.TelemetryConfig", "#[serde(default)]")
+        .message_attribute("retrom.ServerConfig", "#[serde(default)]")
         .field_attribute(
             "retrom.IGDBConfig.client_id",
             "#[serde(alias = \"client_id\", alias = \"clientId\")]",

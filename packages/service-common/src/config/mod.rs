@@ -44,21 +44,25 @@ pub struct ServerConfigManager {
 }
 
 impl ServerConfigManager {
+    fn default_metadata_optimization_config() -> OptimizationConfig {
+        OptimizationConfig {
+            jpeg_quality: 85,
+            jpeg_optimization: false,
+            webp_quality: 85,
+            webp_lossless: true,
+            png_quality: 85,
+            png_optimization_level: 2,
+            png_optimization: true,
+            preferred_image_format: None,
+        }
+    }
+
     fn default_metadata_config() -> MetadataConfig {
         MetadataConfig {
             store_metadata_locally: false,
             smart_structure_enabled: false,
             path: default_metadata_path().to_string_lossy().to_string(),
-            optimization: Some(OptimizationConfig {
-                jpeg_quality: 85,
-                jpeg_optimization: false,
-                webp_quality: 85,
-                webp_lossless: true,
-                png_quality: 85,
-                png_optimization_level: 2,
-                png_optimization: true,
-                preferred_image_format: None,
-            }),
+            optimization: Some(Self::default_metadata_optimization_config()),
         }
     }
 
@@ -70,6 +74,10 @@ impl ServerConfigManager {
         if metadata.path.trim().is_empty() {
             metadata.path = default_metadata_path().to_string_lossy().to_string();
         }
+
+        metadata
+            .optimization
+            .get_or_insert_with(Self::default_metadata_optimization_config);
 
         metadata.smart_structure_enabled = config
             .content_directories
