@@ -27,6 +27,7 @@ function withIfExists(entries, candidate) {
 export function buildToolEnv(extra = {}) {
   const entries = pathEntries();
   const userProfile = process.env.USERPROFILE ?? "";
+  const homeDir = process.env.HOME ?? userProfile;
   const windowsCargoDefaults =
     process.platform === "win32"
       ? {
@@ -35,6 +36,7 @@ export function buildToolEnv(extra = {}) {
         }
       : {};
 
+  withIfExists(entries, path.join(homeDir, ".cargo", "bin"));
   withIfExists(entries, path.join(userProfile, ".cargo", "bin"));
   withIfExists(entries, "C:\\Program Files\\CMake\\bin");
   withIfExists(entries, "C:\\Strawberry\\perl\\bin");
