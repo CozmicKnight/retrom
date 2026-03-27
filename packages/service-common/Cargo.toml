@@ -32,3 +32,4 @@ sevenz-rust2 = { workspace = true }
 config = { workspace = true }
 dotenvy = { workspace = true }
 rayon = { workspace = true }
+uuid = { workspace = true }

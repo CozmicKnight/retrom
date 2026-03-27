@@ -6,6 +6,13 @@
     "cargo:format": {},
     "cargo:build": {},
     "cargo:test": {},
-    "cargo:run": {}
+    "cargo:run": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "node ./scripts/cargow.mjs run -p retrom-service"
+      }
+    }
   }
 }

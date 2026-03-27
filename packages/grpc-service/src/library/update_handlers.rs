@@ -12,6 +12,37 @@ use super::{
     LibraryServiceHandlers,
 };
 
+async fn run_bounded<I, F, T>(work: I, max_in_flight: usize) -> Vec<T>
+where
+    I: IntoIterator<Item = F>,
+    F: std::future::Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    let mut join_set = tokio::task::JoinSet::new();
+    let max_in_flight = std::cmp::max(max_in_flight, 1);
+    let mut iter = work.into_iter();
+    let mut results = Vec::new();
+
+    for _ in 0..max_in_flight {
+        if let Some(fut) = iter.next() {
+            join_set.spawn(fut);
+        }
+    }
+
+    while let Some(res) = join_set.join_next().await {
+        if let Some(next) = iter.next() {
+            join_set.spawn(next);
+        }
+
+        match res {
+            Ok(output) => results.push(output),
+            Err(why) => warn!("Bounded task join failed: {why:#?}"),
+        }
+    }
+
+    results
+}
+
 pub(super) async fn update_library(
     state: &LibraryServiceHandlers,
     _request: Request<UpdateLibraryRequest>,
@@ -61,37 +92,43 @@ pub(super) async fn update_library(
                             }
                         };
 
-                        let mut game_join_set = tokio::task::JoinSet::new();
+                        let scan_concurrency = std::env::var("RETROM_SCAN_CONCURRENCY")
+                            .ok()
+                            .and_then(|v| v.parse::<usize>().ok())
+                            .filter(|v| *v > 0)
+                            .unwrap_or(16);
 
-                        game_resolvers.into_iter().for_each(|game_resolver| {
-                            let db_pool = db_pool.clone();
-                            game_join_set
-                                .spawn(async move { game_resolver.resolve(db_pool.clone()).await });
-                        });
+                        tracing::info!(
+                            scan_concurrency,
+                            "Resolving games with bounded concurrency"
+                        );
 
-                        let resolved_games: Vec<ResolvedGame> = game_join_set
-                            .join_all()
-                            .await
-                            .into_iter()
-                            .filter_map(|handle| match handle {
-                                Ok(game) => Some(game),
-                                Err(why) => {
-                                    warn!("Failed to resolve game: {:#?}", why);
-                                    None
-                                }
-                            })
-                            .collect();
+                        let resolved_games: Vec<ResolvedGame> = run_bounded(
+                            game_resolvers.into_iter().map(|game_resolver| {
+                                let db_pool = db_pool.clone();
+                                async move { game_resolver.resolve(db_pool.clone()).await }
+                            }),
+                            scan_concurrency,
+                        )
+                        .await
+                        .into_iter()
+                        .filter_map(|handle| match handle {
+                            Ok(game) => Some(game),
+                            Err(why) => {
+                                warn!("Failed to resolve game: {:#?}", why);
+                                None
+                            }
+                        })
+                        .collect();
 
-                        let mut file_join_set = tokio::task::JoinSet::new();
-
-                        resolved_games.into_iter().for_each(|resolved_game| {
-                            let db_pool = db_pool.clone();
-                            file_join_set.spawn(async move {
-                                resolved_game.resolve_files(db_pool.clone()).await
-                            });
-                        });
-
-                        file_join_set.join_all().await;
+                        let _ = run_bounded(
+                            resolved_games.into_iter().map(|resolved_game| {
+                                let db_pool = db_pool.clone();
+                                async move { resolved_game.resolve_files(db_pool.clone()).await }
+                            }),
+                            scan_concurrency,
+                        )
+                        .await;
 
                         Ok(())
                     }

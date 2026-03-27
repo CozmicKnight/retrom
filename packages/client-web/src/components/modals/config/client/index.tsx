@@ -37,7 +37,7 @@ export function ClientConfigTab() {
   return (
     <TabsContent
       value="client"
-      className="flex flex-col gap-2 w-full sm:w-fit max-w-full mt-0"
+      className="mt-0 flex w-full min-w-0 flex-col gap-2"
     >
       <DialogHeader>
         <DialogTitle className="text-xl font-extrabold">
@@ -49,7 +49,7 @@ export function ClientConfigTab() {
         </DialogDescription>
       </DialogHeader>
 
-      <Tabs defaultValue={tab}>
+      <Tabs defaultValue={tab} className="w-full">
         <TabsList className={cn("w-full", mode === "web" && "hidden")}>
           {tabItems.map(({ value, name, modes }) => (
             <TabsTrigger

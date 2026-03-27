@@ -7,18 +7,25 @@ use retrom_codegen::retrom::{
     PlatformMetadata, UpdatePlatformsRequest, UpdatePlatformsResponse,
 };
 use retrom_db::{schema, Pool};
-use retrom_service_common::media_cache::cacheable_media::CacheableMetadata;
+use retrom_service_common::{
+    config::{resolve_metadata_path, ServerConfigManager},
+    media_cache::cacheable_media::CacheableMetadata,
+};
 use std::{path::PathBuf, sync::Arc};
 use tonic::{Code, Request, Response, Status};
 
 #[derive(Clone)]
 pub struct PlatformServiceHandlers {
     pub db_pool: Arc<Pool>,
+    pub config_manager: Arc<ServerConfigManager>,
 }
 
 impl PlatformServiceHandlers {
-    pub fn new(db_pool: Arc<Pool>) -> Self {
-        Self { db_pool }
+    pub fn new(db_pool: Arc<Pool>, config_manager: Arc<ServerConfigManager>) -> Self {
+        Self {
+            db_pool,
+            config_manager,
+        }
     }
 }
 
@@ -231,6 +238,8 @@ impl PlatformService for PlatformServiceHandlers {
                 Ok(conn) => conn,
                 Err(why) => return Err(Status::new(Code::Internal, why.to_string())),
             };
+            let config = self.config_manager.get_config().await;
+            let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
 
             let platforms: Vec<retrom::Platform> = schema::platforms::table
                 .filter(schema::platforms::id.eq_any(&request.ids))
@@ -256,8 +265,8 @@ impl PlatformService for PlatformServiceHandlers {
 
             drop(conn);
 
-            join_all(platform_metadata.iter().map(|m| m.clean_cache())).await;
-            join_all(game_metadata.iter().map(|m| m.clean_cache())).await;
+            join_all(platform_metadata.iter().map(|m| m.clean_cache(&metadata_dir))).await;
+            join_all(game_metadata.iter().map(|m| m.clean_cache(&metadata_dir))).await;
         }
 
         let mut conn = match self.db_pool.get().await {

@@ -11,24 +11,24 @@
     "prettier:format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm prettier --write .",
+        "command": "node ./scripts/pnpmw.mjs prettier --write .",
         "cwd": "{projectRoot}"
       },
       "configurations": {
         "check": {
-          "command": "pnpm prettier --check ."
+          "command": "node ./scripts/pnpmw.mjs prettier --check ."
         }
       }
     },
     "buf:format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm buf format --write",
+        "command": "node ./scripts/pnpmw.mjs buf format --write",
         "cwd": "{projectRoot}"
       },
       "configurations": {
         "check": {
-          "command": "pnpm buf format --diff --exit-code"
+          "command": "node ./scripts/pnpmw.mjs buf format --diff --exit-code"
         }
       }
     },

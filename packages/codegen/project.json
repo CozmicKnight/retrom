@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "cache": true,
       "options": {
-        "command": "pnpm buf generate",
+        "command": "node ../../scripts/pnpmw.mjs buf generate",
         "cwd": "{projectRoot}"
       },
       "inputs": [

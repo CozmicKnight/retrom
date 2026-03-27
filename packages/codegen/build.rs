@@ -24,8 +24,9 @@ const DIESEL_INSERTABLE_DERIVES: [&str; 1] = ["Insertable"];
 const DIESEL_UPDATE_DERIVES: [&str; 3] = ["AsChangeset", "Insertable", "Identifiable"];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "protobuf-src")]
-    std::env::set_var("PROTOC", protobuf_src::protoc());
+    println!("cargo:rerun-if-env-changed=PROTOC");
+
+    let vendored_include = configure_protoc()?;
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR not set"));
 
@@ -291,11 +292,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    let mut include_paths = vec![PathBuf::from("./protos/")];
+    if let Some(include_path) = vendored_include {
+        include_paths.push(include_path);
+    }
+
     build
         .file_descriptor_set_path(out_dir.join("retrom_descriptor.bin"))
-        .compile_protos(&proto_paths, &[PathBuf::from("./protos/")])?;
+        .compile_protos(&proto_paths, &include_paths)?;
 
     Ok(())
+}
+
+fn configure_protoc() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    if std::env::var_os("PROTOC").is_some() || has_system_protoc() {
+        return Ok(None);
+    }
+
+    std::env::set_var("PROTOC", protoc_bin_vendored::protoc_bin_path()?);
+    Ok(Some(protoc_bin_vendored::include_path()?))
+}
+
+fn has_system_protoc() -> bool {
+    std::process::Command::new("protoc")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 fn get_diesel_macro(table_name: &str, primary_key: Option<&str>, belongs_to: Vec<&str>) -> String {

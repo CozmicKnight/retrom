@@ -2,7 +2,10 @@ use futures::Future;
 use retrom_codegen::retrom::{JobProgress, JobStatus};
 use std::{
     collections::{HashMap, VecDeque},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 use tokio::{
     sync::{
@@ -33,6 +36,9 @@ pub struct JobOptions {
 pub struct JobManager {
     job_progress: Arc<RwLock<HashMap<JobId, JobProgress>>>,
     invalidation_channel: broadcast::Sender<JobId>,
+    max_concurrent_tasks: usize,
+    active_jobs: Arc<AtomicUsize>,
+    active_tasks: Arc<AtomicUsize>,
 }
 
 impl Default for JobManager {
@@ -43,9 +49,18 @@ impl Default for JobManager {
 
 impl JobManager {
     pub fn new() -> Self {
+        let max_concurrent_tasks = std::env::var("RETROM_JOB_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(16);
+
         Self {
             job_progress: Arc::new(RwLock::new(HashMap::new())),
             invalidation_channel: broadcast::channel(100).0,
+            max_concurrent_tasks,
+            active_jobs: Arc::new(AtomicUsize::new(0)),
+            active_tasks: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -140,6 +155,10 @@ impl JobManager {
 
         let job_progress = self.job_progress.clone();
         let mut maybe_wait_ids = maybe_wait_ids.clone();
+        let max_concurrent_tasks = self.max_concurrent_tasks;
+        let active_jobs = self.active_jobs.clone();
+        let active_tasks = self.active_tasks.clone();
+        let job_name = name.clone();
 
         tokio::spawn(async move {
             let mut depend_join_set = JoinSet::new();
@@ -163,10 +182,6 @@ impl JobManager {
                 maybe_wait_ids.retain(|id| *id != done_id);
             }
 
-            for task in tasks.into_iter() {
-                join_set.spawn(task.instrument(tracing::info_span!("job_task")));
-            }
-
             {
                 let mut job_progress = job_progress.write().await;
                 if let Some(job) = job_progress.get_mut(&id) {
@@ -174,11 +189,59 @@ impl JobManager {
                 }
             }
 
+            let active_jobs_now = active_jobs.fetch_add(1, Ordering::SeqCst) + 1;
+            tracing::info!(
+                job = %job_name,
+                active_jobs = active_jobs_now,
+                max_concurrent_tasks,
+                total_tasks,
+                "Starting job"
+            );
+
+            let mut task_iter = tasks.into_iter();
+            let max_in_flight = std::cmp::max(max_concurrent_tasks, 1);
+            let mut tasks_completed = 0usize;
+
+            for _ in 0..std::cmp::min(max_in_flight, total_tasks) {
+                if let Some(task) = task_iter.next() {
+                    let active_tasks = active_tasks.clone();
+                    join_set.spawn(async move {
+                        let in_flight = active_tasks.fetch_add(1, Ordering::SeqCst) + 1;
+                        tracing::debug!(active_tasks = in_flight, "Job task started");
+
+                        let result = task.instrument(tracing::info_span!("job_task")).await;
+
+                        let in_flight = active_tasks.fetch_sub(1, Ordering::SeqCst) - 1;
+                        tracing::debug!(active_tasks = in_flight, "Job task completed");
+                        result
+                    });
+                }
+            }
+
             while let Some(res) = join_set.join_next().await {
+                tasks_completed += 1;
+
+                if let Some(task) = task_iter.next() {
+                    let active_tasks = active_tasks.clone();
+                    join_set.spawn(async move {
+                        let in_flight = active_tasks.fetch_add(1, Ordering::SeqCst) + 1;
+                        tracing::debug!(active_tasks = in_flight, "Job task started");
+
+                        let result = task.instrument(tracing::info_span!("job_task")).await;
+
+                        let in_flight = active_tasks.fetch_sub(1, Ordering::SeqCst) - 1;
+                        tracing::debug!(active_tasks = in_flight, "Job task completed");
+                        result
+                    });
+                }
+
                 {
                     let mut job_progress = job_progress.write().await;
-                    let tasks_completed = total_tasks - join_set.len();
-                    let percent = (tasks_completed as f64 / total_tasks as f64 * 100.0) as u32;
+                    let percent = if total_tasks == 0 {
+                        100
+                    } else {
+                        (tasks_completed as f64 / total_tasks as f64 * 100.0) as u32
+                    };
 
                     match res {
                         Ok(Ok(_)) => {}
@@ -224,6 +287,8 @@ impl JobManager {
             }
 
             tracing::info!("Job completed: {}", name);
+            let active_jobs_now = active_jobs.fetch_sub(1, Ordering::SeqCst) - 1;
+            tracing::info!(job = %job_name, active_jobs = active_jobs_now, "Job finished");
 
             if let Err(why) = invalidate_sender.send(id) {
                 tracing::debug!("Invalidation channel closed: {:?}", why);

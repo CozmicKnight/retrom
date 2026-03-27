@@ -102,12 +102,14 @@ in {
       serviceConfig = {
         ExecStart = "${lib.getExe cfg.package}";
         Restart = "on-failure";
+        LimitNOFILE = 65536;
         User = cfg.user;
         Group = cfg.group;
         WorkingDirectory = cfg.dataDir;
         Environment = [
           "RETROM_DATA_DIR=${cfg.dataDir}"
           "RETROM_CONFIG=${configFile}"
+          "RUST_BACKTRACE=1"
         ];
       };
     };

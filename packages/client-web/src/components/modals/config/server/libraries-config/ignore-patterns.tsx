@@ -57,7 +57,7 @@ export function IgnorePatternsInput<
   return (
     <Popover>
       <FormItem className="sm:contents sm:space-y-0 w-full">
-        <FormLabel className="sm:hidden">Ignore Patterns</FormLabel>
+        <FormLabel className="sm:hidden">Rules</FormLabel>
         <FormControl>
           <PopoverTrigger asChild>
             <Button
@@ -67,7 +67,7 @@ export function IgnorePatternsInput<
             >
               {field.value.length
                 ? `${field.value.length} ${field.value.length > 1 ? "patterns" : "pattern"}`
-                : "Add pattern"}
+                : "Add"}
             </Button>
           </PopoverTrigger>
         </FormControl>

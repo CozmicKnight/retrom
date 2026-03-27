@@ -26,7 +26,7 @@ export function StorageTypeSelect<
   return (
     <FormItem className="sm:contents sm:space-y-0 w-full">
       <FormLabel className="sm:hidden whitespace-nowrap">
-        Storage Type
+        Structure
       </FormLabel>
       <Select
         disabled={field.disabled}
@@ -68,7 +68,7 @@ export function StorageTypeSelect<
 }
 
 const StorageTypeLabel: Record<StorageType, string> = {
-  [StorageType.MULTI_FILE_GAME]: "Multi-file Games",
-  [StorageType.SINGLE_FILE_GAME]: "Single-file Games",
+  [StorageType.MULTI_FILE_GAME]: "Multi",
+  [StorageType.SINGLE_FILE_GAME]: "Single",
   [StorageType.CUSTOM]: "Custom",
 };

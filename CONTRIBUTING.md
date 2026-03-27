@@ -11,13 +11,20 @@ Thank you for considering contributing to Retrom! This document provides a high-
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (LTS version recommended)
+- [Node.js](https://nodejs.org/) 24 or newer
 - [Rust](https://www.rust-lang.org/tools/install) (stable toolchain)
-- [PNPM](https://pnpm.io/installation) for JavaScript package management
 - [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (comes with Rust) for Rust package management
-- [PostgreSQL](https://www.postgresql.org/download/) (required for the database package)
-- [Perl](https://www.perl.org/) Required to compile some of the Rust packages. On Windows, Strawberry Perl is recommended.
-- [Protobuf](https://protobuf.dev/) Required to compile some of the Rust packages.
+- [Corepack](https://nodejs.org/api/corepack.html) (bundled with modern Node.js releases)
+- [PostgreSQL](https://www.postgresql.org/download/) when running the service without Docker and without the `embedded_db` feature
+
+> [!TIP]
+> You do not need a global `pnpm` installation to get started. This repository provides a bootstrap command that provisions the pinned `pnpm` version through Corepack in a workspace-local directory.
+
+> [!TIP]
+> Cargo builds vendor `protoc` by default, so you do not need a system Protobuf installation for normal builds.
+
+> [!TIP]
+> Cargo builds also enable vendored OpenSSL by default. If you already have a working system OpenSSL installation and want to prefer it instead, set `OPENSSL_NO_VENDOR=1` before running Cargo or Nx. If OpenSSL is installed in a non-standard location, also set `OPENSSL_DIR`.
 
 ### Initial setup
 
@@ -28,17 +35,29 @@ Thank you for considering contributing to Retrom! This document provides a high-
    cd retrom
    ```
 
-2. Install JavaScript dependencies
+2. Bootstrap the workspace
 
    ```bash
-   pnpm install
+   npm run bootstrap
    ```
 
-3. Run the project. This will spawn both the Rust backend service and the React web client.
+3. Check the remaining native prerequisites on your machine
 
    ```bash
-   pnpm nx dev retrom-client-web
+   npm run doctor
    ```
+
+4. Run the project. This will spawn both the Rust backend service and the React web client.
+
+   ```bash
+   node ./scripts/pnpmw.mjs nx dev retrom-client-web
+   ```
+
+> [!TIP]
+> On Windows, desktop builds also need the Microsoft C++ build tools and the WebView2 runtime.
+
+> [!TIP]
+> If `pnpm` is not on your `PATH`, use `node ./scripts/pnpmw.mjs ...`. The wrapper sets `COREPACK_HOME` automatically for this repository.
 
 ### Using GitHub Copilot CLI
 

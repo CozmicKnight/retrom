@@ -37,6 +37,7 @@ message ContentDirectory {
   optional StorageType storage_type = 2;
   optional IgnorePatterns ignore_patterns = 3;
   optional CustomLibraryDefinition custom_library_definition = 4;
+  bool smart_structure_enabled = 5;
 }
 
 message IGDBConfig {
@@ -90,6 +91,8 @@ message MetadataConfig {
 
   bool store_metadata_locally = 1;
   OptimizationConfig optimization = 2;
+  bool smart_structure_enabled = 3;
+  string path = 4;
 }
 
 message ServerConfig {

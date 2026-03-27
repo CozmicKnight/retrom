@@ -13,6 +13,7 @@ use middleware::{
 };
 use public::public_routes;
 use retrom_db::Pool;
+use retrom_service_common::config::ServerConfigManager;
 use std::sync::Arc;
 use tower_http::{
     compression::CompressionLayer, cors::CorsLayer, decompression::RequestDecompressionLayer,
@@ -26,11 +27,11 @@ mod middleware;
 mod public;
 mod web;
 
-pub fn rest_service(pool: Arc<Pool>) -> Router {
+pub fn rest_service(pool: Arc<Pool>, config_manager: Arc<ServerConfigManager>) -> Router {
     let api_routes = Router::new()
         .nest("/file", file_routes())
         .nest("/game", game_routes())
-        .nest("/public", public_routes());
+        .nest("/public", public_routes(config_manager));
 
     Router::new()
         .nest("/rest", api_routes)

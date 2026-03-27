@@ -7,7 +7,9 @@ use retrom_codegen::retrom::{
     DeleteMissingEntriesResponse, Game, GameFile, GameMetadata, Platform, PlatformMetadata,
 };
 use retrom_db::schema;
-use retrom_service_common::media_cache::cacheable_media::CacheableMetadata;
+use retrom_service_common::{
+    config::resolve_metadata_path, media_cache::cacheable_media::CacheableMetadata,
+};
 use std::{collections::HashSet, path::PathBuf, str::FromStr};
 use tonic::Status;
 use tracing::error;
@@ -16,6 +18,8 @@ pub async fn delete_library(
     state: &LibraryServiceHandlers,
     _request: DeleteLibraryRequest,
 ) -> Result<DeleteLibraryResponse, Status> {
+    let config = state.config_manager.get_config().await;
+    let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
     let mut conn = match state.db_pool.get().await {
         Ok(conn) => conn,
         Err(why) => return Err(Status::internal(why.to_string())),
@@ -35,8 +39,13 @@ pub async fn delete_library(
                     .await
                     .unwrap_or_default();
 
-                join_all(platform_metadata.iter().map(|m| m.clean_cache())).await;
-                join_all(game_metadata.iter().map(|m| m.clean_cache())).await;
+                join_all(
+                    platform_metadata
+                        .iter()
+                        .map(|m| m.clean_cache(&metadata_dir)),
+                )
+                .await;
+                join_all(game_metadata.iter().map(|m| m.clean_cache(&metadata_dir))).await;
 
                 diesel::delete(retrom_db::schema::platforms::table)
                     .filter(retrom_db::schema::platforms::third_party.eq(false))

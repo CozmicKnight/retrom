@@ -48,9 +48,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@retrom/ui/components/select";
+import { BrowseButton } from "./libraries-config/browse";
 
 const metadataSchema = z.object({
   storeMetadataLocally: z.boolean().default(false),
+  path: z.string().min(1, "Metadata path is required"),
   optimization: z
     .object({
       jpegQuality: z.coerce.number().min(1).max(100).default(85),
@@ -84,12 +86,14 @@ export function MetadataConfig(props: {
 }) {
   const navigate = useNavigate();
   const { mutate: update, status } = useUpdateServerConfig();
+  const currentMetadata = create(
+    MetadataConfigSchema,
+    props.currentConfig.metadata,
+  );
 
   const form = useForm<z.infer<typeof metadataSchema>>({
     resolver: zodResolver(metadataSchema),
-    defaultValues: metadataSchema.parse(
-      create(MetadataConfigSchema, props.currentConfig.metadata),
-    ),
+    defaultValues: metadataSchema.parse(currentMetadata),
   });
 
   const handleSubmit = useCallback(
@@ -98,7 +102,12 @@ export function MetadataConfig(props: {
         update({
           config: {
             ...props.currentConfig,
-            metadata: create(MetadataConfigSchema, values),
+            metadata: create(MetadataConfigSchema, {
+              ...values,
+              smartStructureEnabled:
+                props.currentConfig.metadata?.smartStructureEnabled ??
+                currentMetadata.smartStructureEnabled,
+            }),
           },
         });
 
@@ -117,8 +126,6 @@ export function MetadataConfig(props: {
   return (
     <TooltipProvider>
       <TabsContent value="metadata" className="mt-6 flex flex-col gap-6">
-        <LocalMetadataStatus />
-
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
@@ -156,6 +163,33 @@ export function MetadataConfig(props: {
                 </FormItem>
               )}
             />
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <FormLabel className="text-base font-semibold">
+                  Metadata Path
+                </FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Choose where locally stored metadata files should be written.
+                </p>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="path"
+                render={(props) => (
+                  <BrowseButton
+                    {...props}
+                    label="Metadata Path"
+                    placeholder="Select a metadata directory..."
+                    dialogTitle="Select Metadata Path"
+                    dialogDescription="Select a directory for locally stored metadata."
+                  />
+                )}
+              />
+            </div>
+
+            <LocalMetadataStatus />
 
             <FormField
               control={form.control}
@@ -436,32 +470,42 @@ function LocalMetadataStatus() {
   const totalByteSize = BigInt(data?.totalByteSize ?? 0);
 
   return (
-    <div className="flex items-center gap-4">
-      <Button
-        disabled={pending}
-        onClick={() => mutate({})}
-        size="sm"
-        variant="secondary"
-        className="gap-2"
-      >
-        <Trash2Icon size={16} /> Clear Local Metadata
-      </Button>
-
-      {pending ? (
-        <Loader2Icon className="animate-spin inline-block" />
-      ) : (
-        <p className="text-sm italic text-muted-foreground">
-          <span>{data?.totalFiles ?? 0}</span>
-          <span> items using</span>
-          <span>
-            {" "}
-            {readableByteSize(
-              totalByteSize,
-              getBestFileSizeOrder(totalByteSize / 10n),
-            )}
-          </span>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <FormLabel className="text-base font-semibold">Clear Metadata</FormLabel>
+        <p className="text-sm text-muted-foreground">
+          Remove cached local metadata files from the configured metadata path.
         </p>
-      )}
+      </div>
+
+      <div className="flex items-center gap-4">
+        <Button
+          type="button"
+          disabled={pending}
+          onClick={() => mutate({})}
+          size="sm"
+          variant="secondary"
+          className="gap-2"
+        >
+          <Trash2Icon size={16} /> Clear Local Metadata
+        </Button>
+
+        {pending ? (
+          <Loader2Icon className="animate-spin inline-block" />
+        ) : (
+          <p className="text-sm italic text-muted-foreground">
+            <span>{data?.totalFiles ?? 0}</span>
+            <span> items using</span>
+            <span>
+              {" "}
+              {readableByteSize(
+                totalByteSize,
+                getBestFileSizeOrder(totalByteSize / 10n),
+              )}
+            </span>
+          </p>
+        )}
+      </div>
     </div>
   );
 }

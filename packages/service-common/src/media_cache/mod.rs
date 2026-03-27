@@ -1,4 +1,3 @@
-use crate::retrom_dirs::RetromDirs;
 use bigdecimal::ToPrimitive;
 use caesium::{compress_in_memory, convert_in_memory, parameters::CSParameters};
 use index::{IndexEntry, IndexManager};
@@ -8,12 +7,17 @@ use retrom_codegen::retrom::metadata_config::ImageFormat;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
 };
 use thiserror::Error;
 use tokio::fs;
+use tokio::sync::Semaphore;
 use tokio_retry::Condition;
 use tracing::{debug, instrument, warn, Instrument};
+use uuid::Uuid;
 
 pub mod cacheable_media;
 pub mod index;
@@ -57,6 +61,26 @@ impl From<reqwest::Error> for MediaCacheError {
 
 pub type Result<T> = std::result::Result<T, MediaCacheError>;
 
+struct CounterGuard {
+    counter: Arc<AtomicUsize>,
+    label: &'static str,
+}
+
+impl CounterGuard {
+    fn increment(counter: Arc<AtomicUsize>, label: &'static str) -> Self {
+        let value = counter.fetch_add(1, Ordering::SeqCst) + 1;
+        debug!(value, metric = label, "Counter incremented");
+        Self { counter, label }
+    }
+}
+
+impl Drop for CounterGuard {
+    fn drop(&mut self) {
+        let value = self.counter.fetch_sub(1, Ordering::SeqCst) - 1;
+        debug!(value, metric = self.label, "Counter decremented");
+    }
+}
+
 /// Options for caching media files
 #[derive(Debug)]
 pub struct CacheMediaOpts {
@@ -86,8 +110,8 @@ async fn ensure_cache_dir(cache_dir: &PathBuf) -> Result<()> {
 }
 
 /// Convert a local cache path to a public URL that can be served by the web server
-pub fn get_public_url(cache_path: &Path) -> Result<String> {
-    let media_dir = RetromDirs::new().media_dir();
+pub fn get_public_url(cache_path: &Path, metadata_dir: &Path) -> Result<String> {
+    let media_dir = metadata_dir;
     if let Ok(relative_path) = cache_path.strip_prefix(&media_dir) {
         Ok(PathBuf::from_str("media")?
             .join(relative_path)
@@ -123,6 +147,11 @@ pub struct MediaCache {
     compression_threads: Arc<ThreadPool>,
     index_manager: IndexManager,
     config_manager: Arc<crate::config::ServerConfigManager>,
+    download_limiter: Arc<Semaphore>,
+    conversion_limiter: Arc<Semaphore>,
+    active_downloads: Arc<AtomicUsize>,
+    active_conversions: Arc<AtomicUsize>,
+    open_temp_files: Arc<AtomicUsize>,
 }
 
 struct RetryCondition {}
@@ -164,12 +193,27 @@ impl MediaCache {
                 .build()
                 .expect("Failed to create compression thread pool"),
         );
+        let download_concurrency = std::env::var("RETROM_MEDIA_DOWNLOAD_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(8);
+        let conversion_concurrency = std::env::var("RETROM_IMAGE_CONVERSION_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(4);
 
         Self {
             client,
             compression_threads,
             index_manager: IndexManager::new(),
             config_manager,
+            download_limiter: Arc::new(Semaphore::new(download_concurrency)),
+            conversion_limiter: Arc::new(Semaphore::new(conversion_concurrency)),
+            active_downloads: Arc::new(AtomicUsize::new(0)),
+            active_conversions: Arc::new(AtomicUsize::new(0)),
+            open_temp_files: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -241,6 +285,15 @@ impl MediaCache {
             opts.remote_url, cache_path
         );
 
+        let _download_permit = self
+            .download_limiter
+            .acquire()
+            .await
+            .expect("download limiter unexpectedly closed");
+        let _download_guard =
+            CounterGuard::increment(self.active_downloads.clone(), "active_downloads");
+        debug!("Started media download: {}", opts.remote_url);
+
         let response = match self.fetch_media(opts).await {
             Ok(res) => res,
             Err(MediaCacheError::NotFound(_)) => return Ok(cache_path),
@@ -248,6 +301,7 @@ impl MediaCache {
         };
 
         let bytes = response.bytes().await?;
+        debug!("Finished media download: {}", opts.remote_url);
 
         let config = self.config_manager.get_config().await;
         let optimization_config = config.metadata.and_then(|m| m.optimization);
@@ -274,6 +328,14 @@ impl MediaCache {
         let image_format = optimization_config
             .and_then(|m| m.preferred_image_format)
             .unwrap_or(ImageFormat::Jpeg.into());
+        let _conversion_permit = self
+            .conversion_limiter
+            .acquire()
+            .await
+            .expect("conversion limiter unexpectedly closed");
+        let _conversion_guard =
+            CounterGuard::increment(self.active_conversions.clone(), "active_conversions");
+        debug!("Image conversion started");
 
         let thread_pool = self.compression_threads.clone();
         let compressed_bytes = tokio::task::spawn_blocking(move || {
@@ -314,8 +376,15 @@ impl MediaCache {
             config = ?optimization_config
         ))
         .await?;
+        debug!("Image conversion completed");
 
-        fs::write(&cache_path, compressed_bytes).await?;
+        let tmp_path = cache_path.with_extension(format!("{}.tmp", Uuid::new_v4().simple()));
+        let _temp_file_guard =
+            CounterGuard::increment(self.open_temp_files.clone(), "open_temp_files");
+        debug!("Created temporary media cache file");
+        fs::write(&tmp_path, compressed_bytes).await?;
+        fs::rename(&tmp_path, &cache_path).await?;
+        debug!("Removed temporary media cache file");
 
         if let Err(e) = self.index_manager.update_entry(opts).await {
             warn!("Failed to update cache index for {cache_path:?}: {e:?}");
@@ -389,7 +458,8 @@ mod integration_tests {
             minutes_played: Some(0),
         };
 
-        let cache_dir = game_metadata.get_cache_dir().unwrap();
+        let media_dir = crate::config::default_metadata_path();
+        let cache_dir = game_metadata.get_cache_dir(&media_dir).unwrap();
         // Check that the cache dir has the correct structure (ends with correct path)
         assert!(cache_dir.to_string_lossy().ends_with("media/games/42"));
 
@@ -404,7 +474,7 @@ mod integration_tests {
             updated_at: None,
         };
 
-        let platform_cache_dir = platform_metadata.get_cache_dir().unwrap();
+        let platform_cache_dir = platform_metadata.get_cache_dir(&media_dir).unwrap();
         // Check that the platform cache dir has the correct structure
         assert!(platform_cache_dir
             .to_string_lossy()
@@ -416,7 +486,7 @@ mod integration_tests {
         // Use the actual media directory from RetromDirs::new() (which uses the test env)
         let media_dir = RetromDirs::new().media_dir();
         let test_path = media_dir.join("games").join("42").join("image.jpg");
-        let public_url = get_public_url(&test_path).unwrap();
+        let public_url = get_public_url(&test_path, &media_dir).unwrap();
 
         assert_eq!(public_url, "media/games/42/image.jpg");
     }
@@ -488,7 +558,8 @@ mod integration_tests {
             minutes_played: Some(0),
         };
 
-        let cache_dir = game_metadata.get_cache_dir().unwrap();
+        let media_dir = crate::config::default_metadata_path();
+        let cache_dir = game_metadata.get_cache_dir(&media_dir).unwrap();
 
         // Verify subdirectories would be created at the right paths
         let artwork_cache_dir = cache_dir.join("artwork");
@@ -507,8 +578,8 @@ mod integration_tests {
         let test_artwork_path = artwork_cache_dir.join("test.jpg");
         let test_screenshot_path = screenshot_cache_dir.join("test.png");
 
-        let artwork_url = get_public_url(&test_artwork_path).unwrap();
-        let screenshot_url = get_public_url(&test_screenshot_path).unwrap();
+        let artwork_url = get_public_url(&test_artwork_path, &media_dir).unwrap();
+        let screenshot_url = get_public_url(&test_screenshot_path, &media_dir).unwrap();
 
         assert_eq!(artwork_url, "media/games/123/artwork/test.jpg");
         assert_eq!(screenshot_url, "media/games/123/screenshots/test.png");
@@ -524,7 +595,8 @@ mod integration_tests {
         };
 
         // Create a test cache directory
-        let cache_dir = game_metadata.get_cache_dir().unwrap();
+        let media_dir = crate::config::default_metadata_path();
+        let cache_dir = game_metadata.get_cache_dir(&media_dir).unwrap();
 
         let opts = CacheMediaOpts {
             remote_url: "https://example.com/cover.jpg".to_string(),

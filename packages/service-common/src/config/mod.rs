@@ -21,12 +21,64 @@ pub enum RetromConfigError {
 
 pub type Result<T> = std::result::Result<T, RetromConfigError>;
 
+pub fn default_metadata_path() -> PathBuf {
+    RetromDirs::new().media_dir()
+}
+
+pub fn resolve_metadata_path(config: Option<&MetadataConfig>) -> PathBuf {
+    config
+        .and_then(|metadata| {
+            let path = metadata.path.trim();
+            if path.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(path))
+            }
+        })
+        .unwrap_or_else(default_metadata_path)
+}
+
 pub struct ServerConfigManager {
     config: RwLock<ServerConfig>,
     config_path: PathBuf,
 }
 
 impl ServerConfigManager {
+    fn default_metadata_config() -> MetadataConfig {
+        MetadataConfig {
+            store_metadata_locally: false,
+            smart_structure_enabled: false,
+            path: default_metadata_path().to_string_lossy().to_string(),
+            optimization: Some(OptimizationConfig {
+                jpeg_quality: 85,
+                jpeg_optimization: false,
+                webp_quality: 85,
+                webp_lossless: true,
+                png_quality: 85,
+                png_optimization_level: 2,
+                png_optimization: true,
+                preferred_image_format: None,
+            }),
+        }
+    }
+
+    fn with_runtime_defaults(mut config: ServerConfig) -> ServerConfig {
+        let metadata = config
+            .metadata
+            .get_or_insert_with(Self::default_metadata_config);
+
+        if metadata.path.trim().is_empty() {
+            metadata.path = default_metadata_path().to_string_lossy().to_string();
+        }
+
+        metadata.smart_structure_enabled = config
+            .content_directories
+            .iter()
+            .any(|content_directory| content_directory.smart_structure_enabled);
+
+        config
+    }
+
     fn get_default_config() -> ServerConfig {
         ServerConfig {
             content_directories: vec![ContentDirectory {
@@ -34,24 +86,13 @@ impl ServerConfigManager {
                 storage_type: Some(i32::from(StorageType::MultiFileGame)),
                 ignore_patterns: None,
                 custom_library_definition: None,
+                smart_structure_enabled: false,
             }],
             saves: Some(SavesConfig {
                 max_save_files_backups: 5,
                 max_save_states_backups: 5,
             }),
-            metadata: Some(MetadataConfig {
-                store_metadata_locally: false,
-                optimization: Some(OptimizationConfig {
-                    jpeg_quality: 85,
-                    jpeg_optimization: false,
-                    webp_quality: 85,
-                    webp_lossless: true,
-                    png_quality: 85,
-                    png_optimization_level: 2,
-                    png_optimization: true,
-                    preferred_image_format: None,
-                }),
-            }),
+            metadata: Some(Self::default_metadata_config()),
             ..Default::default()
         }
     }
@@ -93,14 +134,15 @@ impl ServerConfigManager {
     }
 
     pub async fn get_config(&self) -> ServerConfig {
-        self.config.read().await.clone()
+        Self::with_runtime_defaults(self.config.read().await.clone())
     }
 
     pub fn get_config_blocking(&self) -> ServerConfig {
-        self.config.blocking_read().clone()
+        Self::with_runtime_defaults(self.config.blocking_read().clone())
     }
 
     pub async fn update_config(&self, config: ServerConfig) -> Result<()> {
+        let config = Self::with_runtime_defaults(config);
         let data = serde_json::to_vec_pretty(&config)?;
         tokio::fs::write(&self.config_path, data).await?;
         *self.config.write().await = config;
@@ -146,9 +188,10 @@ impl ServerConfigManager {
                 storage_type: Some(i32::from(StorageType::MultiFileGame)),
                 ignore_patterns: None,
                 custom_library_definition: None,
+                smart_structure_enabled: false,
             });
         }
 
-        Ok(s)
+        Ok(Self::with_runtime_defaults(s))
     }
 }

@@ -24,13 +24,13 @@ use retrom_codegen::{
 };
 use retrom_db::{schema, Pool};
 use retrom_service_common::{
+    config::resolve_metadata_path,
     media_cache::{cacheable_media::CacheableMetadata, get_public_url, MediaCache},
     metadata_providers::{
         igdb::provider::{IGDBProvider, IgdbSearchData},
         steam::provider::SteamWebApiProvider,
         GameMetadataProvider, MetadataProvider, PlatformMetadataProvider,
     },
-    retrom_dirs::RetromDirs,
 };
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
@@ -154,6 +154,7 @@ impl MetadataService for MetadataServiceHandlers {
             .collect();
 
         let config = self.config_manager.get_config().await;
+        let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
         let store_metadata = config
             .metadata
             .map(|m| m.store_metadata_locally)
@@ -165,7 +166,7 @@ impl MetadataService for MetadataServiceHandlers {
                 .iter()
                 .map(|meta| {
                     async {
-                        if meta.get_cache_dir().is_some() {
+                        if meta.get_cache_dir(&metadata_dir).is_some() {
                             let mut paths = MediaPaths {
                                 cover_url: None,
                                 background_url: None,
@@ -175,7 +176,7 @@ impl MetadataService for MetadataServiceHandlers {
                                 artwork_urls: vec![],
                             };
 
-                            let cache_opts = meta.get_cacheable_media_opts();
+                            let cache_opts = meta.get_cacheable_media_opts(&metadata_dir);
                             let meta_clone = meta.clone();
                             let mut cache_tasks = vec![];
 
@@ -222,7 +223,7 @@ impl MetadataService for MetadataServiceHandlers {
                                     continue;
                                 }
 
-                                let public_url = match get_public_url(&cache_path) {
+                                let public_url = match get_public_url(&cache_path, &metadata_dir) {
                                     Ok(url) => url,
                                     Err(why) => {
                                         tracing::warn!(
@@ -323,6 +324,7 @@ impl MetadataService for MetadataServiceHandlers {
         let request = request.into_inner();
         let metadata_to_update = request.metadata;
         let config = self.config_manager.get_config().await;
+        let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
         let store_metadata = config
             .metadata
             .map(|m| m.store_metadata_locally)
@@ -331,13 +333,14 @@ impl MetadataService for MetadataServiceHandlers {
         join_all(metadata_to_update.iter().map(|metadata| async {
             let job_manager = self.job_manager.clone();
             let cache = self.media_cache.clone();
+            let metadata_dir = metadata_dir.clone();
 
-            if let Err(e) = metadata.clean_cache().await {
+            if let Err(e) = metadata.clean_cache(&metadata_dir).await {
                 error!("Failed to clean cache for metadata: {}", e);
                 return;
             }
 
-            let opts = metadata.get_cacheable_media_opts();
+            let opts = metadata.get_cacheable_media_opts(&metadata_dir);
 
             let job_name = format!("Cache Media Files For Game {}", metadata.game_id);
 
@@ -423,9 +426,12 @@ impl MetadataService for MetadataServiceHandlers {
     ) -> Result<Response<UpdatePlatformMetadataResponse>, Status> {
         let request = request.into_inner();
         let metadata_to_update = request.metadata;
+        let config = self.config_manager.get_config().await;
+        let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
 
-        join_all(metadata_to_update.iter().map(|metadata| async move {
-            if let Err(e) = metadata.clean_cache().await {
+        join_all(metadata_to_update.iter().map(|metadata| async {
+            let metadata_dir = metadata_dir.clone();
+            if let Err(e) = metadata.clean_cache(&metadata_dir).await {
                 error!("Failed to clean cache for platform metadata: {}", e);
                 return;
             }
@@ -433,7 +439,7 @@ impl MetadataService for MetadataServiceHandlers {
             let job_manager = self.job_manager.clone();
             let cache = self.media_cache.clone();
 
-            let opts = metadata.get_cacheable_media_opts();
+            let opts = metadata.get_cacheable_media_opts(&metadata_dir);
 
             let job_name = format!("Cache Media Files For Platform {}", metadata.platform_id);
 
@@ -745,8 +751,10 @@ impl MetadataService for MetadataServiceHandlers {
         &self,
         _request: Request<GetLocalMetadataStatusRequest>,
     ) -> Result<Response<GetLocalMetadataStatusResponse>, Status> {
-        let response = tokio::task::spawn_blocking(|| {
-            let media_dir = RetromDirs::new().media_dir();
+        let config = self.config_manager.get_config().await;
+        let metadata_dir = resolve_metadata_path(config.metadata.as_ref());
+        let response = tokio::task::spawn_blocking(move || {
+            let media_dir = metadata_dir;
 
             let mut total_byte_size = 0i64;
             let mut total_files = 0;
@@ -778,7 +786,8 @@ impl MetadataService for MetadataServiceHandlers {
         &self,
         _request: Request<DeleteLocalMetadataRequest>,
     ) -> Result<Response<DeleteLocalMetadataResponse>, Status> {
-        let media_dir = RetromDirs::new().media_dir();
+        let config = self.config_manager.get_config().await;
+        let media_dir = resolve_metadata_path(config.metadata.as_ref());
 
         if media_dir.exists() {
             tokio::fs::remove_dir_all(&media_dir)

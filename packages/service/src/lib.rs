@@ -132,7 +132,7 @@ pub async fn get_server(
 
     let pool_state = Arc::new(pool);
 
-    let rest_service = rest_service(pool_state.clone());
+    let rest_service = rest_service(pool_state.clone(), config_manager.clone());
     let grpc_service = grpc_service(&db_url, config_manager);
     let webdav_service = webdav_service(Some("/dav"));
 
@@ -161,10 +161,22 @@ pub async fn get_server(
         async move {
             let server = async {
                 loop {
-                    let (socket, addr) = listener
-                        .accept()
-                        .await
-                        .expect("Could not accept connection");
+                    let (socket, addr) = match listener.accept().await {
+                        Ok(v) => v,
+                        Err(err) => {
+                            if is_too_many_open_files(&err) {
+                                tracing::error!(
+                                    "Could not accept connection due to file descriptor exhaustion: {}",
+                                    err
+                                );
+                                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                                continue;
+                            }
+
+                            tracing::error!("Could not accept connection: {}", err);
+                            continue;
+                        }
+                    };
 
                     let grpc_service = grpc_service.clone();
                     let rest_service = rest_service.clone();
@@ -346,5 +358,17 @@ async fn shutdown_signal() {
         }
 
         handle.close();
+    }
+}
+
+fn is_too_many_open_files(err: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        matches!(err.raw_os_error(), Some(4))
+    }
+
+    #[cfg(not(windows))]
+    {
+        matches!(err.raw_os_error(), Some(23 | 24))
     }
 }

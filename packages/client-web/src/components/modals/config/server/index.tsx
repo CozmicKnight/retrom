@@ -68,7 +68,7 @@ export function ServerConfigTab() {
   return (
     <TabsContent
       value="server"
-      className="flex flex-col gap-2 w-full sm:w-fit max-w-full mt-0"
+      className="mt-0 flex w-full min-w-0 flex-col gap-2"
     >
       <DialogHeader>
         <DialogTitle className="text-xl font-extrabold">
@@ -87,7 +87,7 @@ export function ServerConfigTab() {
         <ErrorState />
       ) : (
         <Tabs defaultValue={tab ?? "contentDirectories"} className="w-full">
-          <TabsList className="w-full">
+          <TabsList className="flex h-fit w-full flex-wrap">
             {Object.values(tabItems).map(({ value, name }) => (
               <TabsTrigger key={value} value={value} className="w-full text-sm">
                 {name}

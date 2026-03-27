@@ -20,15 +20,26 @@ import {
 export function BrowseButton<T extends FieldValues>(props: {
   field: ControllerRenderProps<T>;
   fieldState: ControllerFieldState;
+  dialogTitle?: string;
+  dialogDescription?: string;
+  label?: string;
+  placeholder?: string;
 }) {
   const { openModal } = useModalAction("serverFileExplorerModal");
-  const { field, fieldState } = props;
+  const {
+    field,
+    fieldState,
+    dialogTitle = "Select Library Path",
+    dialogDescription = "Select a directory for this library.",
+    label = "Path",
+    placeholder = "Select a directory...",
+  } = props;
 
   const browse = useCallback(
     (setValueCallback: (path: string) => void) => {
       openModal({
-        title: "Select Library Path",
-        description: "Select a directory for this library.",
+        title: dialogTitle,
+        description: dialogDescription,
         onClose: (path) => {
           if (path) {
             setValueCallback(path);
@@ -36,14 +47,14 @@ export function BrowseButton<T extends FieldValues>(props: {
         },
       });
     },
-    [openModal],
+    [dialogDescription, dialogTitle, openModal],
   );
 
   return (
     <TooltipProvider>
       <Tooltip>
         <FormItem className="sm:flex sm:items-center sm:gap-2 h-min sm:space-y-0 py-1 relative">
-          <FormLabel className="sm:hidden">Path</FormLabel>
+          <FormLabel className="sm:hidden">{label}</FormLabel>
 
           <div className="flex w-full gap-2 sm:contents">
             <Button
@@ -60,7 +71,7 @@ export function BrowseButton<T extends FieldValues>(props: {
               <FormControl>
                 <Input
                   {...field}
-                  placeholder="Select a directory..."
+                  placeholder={placeholder}
                   className={cn(
                     "text-xs text-muted-foreground transition-colors sm:w-[350px] overflow-hidden text-ellipsis",
                     "sm:border-none font-mono placeholder:italic bg-transparent dark:bg-transparent",

@@ -1,6 +1,13 @@
 import { Button } from "@retrom/ui/components/button";
+import { Checkbox } from "@retrom/ui/components/checkbox";
 import { DialogFooter } from "@retrom/ui/components/dialog";
-import { Form, FormField } from "@retrom/ui/components/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@retrom/ui/components/form";
 import {
   Table,
   TableBody,
@@ -12,6 +19,7 @@ import {
 import { TabsContent } from "@retrom/ui/components/tabs";
 import {
   ContentDirectorySchema,
+  MetadataConfigSchema,
   ServerConfig,
   StorageType,
 } from "@retrom/codegen/retrom/server/config_pb";
@@ -46,6 +54,7 @@ export const contentDirectorySchema = z.object({
       patterns: z.string().array(),
     })
     .default({ patterns: [] }),
+  smartStructureEnabled: z.boolean().default(false),
 }) satisfies InferSchema<
   RawMessage<ServerConfig>["contentDirectories"][number]
 >;
@@ -92,10 +101,23 @@ export function LibrariesConfig(props: {
       );
 
       try {
+        const smartStructureEnabled = contentDirectories.some(
+          (cd) => cd.smartStructureEnabled,
+        );
         const next = {
           ...props.currentConfig,
+          metadata: create(MetadataConfigSchema, {
+            ...props.currentConfig.metadata,
+            smartStructureEnabled,
+          }),
           contentDirectories: contentDirectories.map((cd) =>
-            create(ContentDirectorySchema, cd),
+            create(ContentDirectorySchema, {
+              ...cd,
+              customLibraryDefinition:
+                cd.storageType === StorageType.CUSTOM
+                  ? cd.customLibraryDefinition
+                  : { definition: "" },
+            }),
           ),
         };
 
@@ -113,6 +135,9 @@ export function LibrariesConfig(props: {
   const isValid = form.formState.isValid;
   const canSubmit = isDirty && isValid && status !== "pending";
   const contentDirectories = form.watch("contentDirectories");
+  const showCustomLibraryColumn = contentDirectories.some(
+    (library) => library.storageType === StorageType.CUSTOM,
+  );
 
   const action = useCallback(
     (library: (typeof contentDirectories)[number], index: number) => {
@@ -131,16 +156,20 @@ export function LibrariesConfig(props: {
   return (
     <TabsContent value="contentDirectories">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
-          <Table>
+        <form
+          onSubmit={form.handleSubmit(handleSubmit)}
+          className="flex flex-col gap-4"
+        >
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow className="hidden sm:table-row">
                 <TableHead>Path</TableHead>
                 <TableHead>Structure</TableHead>
+                {showCustomLibraryColumn ? <TableHead>Library Structure</TableHead> : null}
                 <TableHead>
-                  Ignore Patterns <IgnorePatternsTooltip />
+                  Rules <IgnorePatternsTooltip />
                 </TableHead>
-                <TableHead />
+                <TableHead>Smart</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -173,6 +202,24 @@ export function LibrariesConfig(props: {
                         render={StorageTypeSelect}
                       />
                     </TableCell>
+                    {showCustomLibraryColumn ? (
+                      <TableCell className="sm:w-[150px]">
+                        <FormField
+                          disabled={
+                            library.newly === "removed" ||
+                            library.storageType !== StorageType.CUSTOM
+                          }
+                          control={form.control}
+                          name={`contentDirectories.${index}.customLibraryDefinition.definition`}
+                          render={(props) => (
+                            <CustomLibraryDefinitionInput
+                              {...props}
+                              index={index}
+                            />
+                          )}
+                        />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="sm:w-[150px]">
                       <FormField
                         disabled={library.newly === "removed"}
@@ -183,17 +230,24 @@ export function LibrariesConfig(props: {
                     </TableCell>
                     <TableCell>
                       <FormField
-                        disabled={
-                          library.newly === "removed" ||
-                          library.storageType !== StorageType.CUSTOM
-                        }
+                        disabled={library.newly === "removed"}
                         control={form.control}
-                        name={`contentDirectories.${index}.customLibraryDefinition.definition`}
-                        render={(props) => (
-                          <CustomLibraryDefinitionInput
-                            {...props}
-                            index={index}
-                          />
+                        name={`contentDirectories.${index}.smartStructureEnabled`}
+                        render={({ field }) => (
+                          <FormItem className="sm:contents sm:space-y-0">
+                            <FormLabel className="sm:hidden">Smart</FormLabel>
+                            <FormControl>
+                              <div className="flex h-full items-center justify-start sm:justify-center">
+                                <Checkbox
+                                  disabled={field.disabled}
+                                  checked={field.value}
+                                  onCheckedChange={(checked) =>
+                                    field.onChange(checked === true)
+                                  }
+                                />
+                              </div>
+                            </FormControl>
+                          </FormItem>
                         )}
                       />
                     </TableCell>
@@ -234,8 +288,12 @@ export function LibrariesConfig(props: {
               })}
 
               <TableRow className="*:py-2 border-b-0 sm:*:px-4 *:px-0">
-                <TableCell colSpan={5} className="text-end">
+                <TableCell
+                  colSpan={showCustomLibraryColumn ? 6 : 5}
+                  className="text-end"
+                >
                   <Button
+                    type="button"
                     size="icon"
                     variant="secondary"
                     className="min-h-0 h-min w-min p-2 hidden sm:flex"
@@ -246,6 +304,7 @@ export function LibrariesConfig(props: {
                         storageType: 0,
                         ignorePatterns: { patterns: [] },
                         customLibraryDefinition: { definition: "" },
+                        smartStructureEnabled: false,
                       })
                     }
                   >
@@ -253,6 +312,7 @@ export function LibrariesConfig(props: {
                   </Button>
 
                   <Button
+                    type="button"
                     size="icon"
                     variant="secondary"
                     className="min-h-0 sm:hidden flex gap-2 w-full items-center"
@@ -263,6 +323,7 @@ export function LibrariesConfig(props: {
                         storageType: 0,
                         ignorePatterns: { patterns: [] },
                         customLibraryDefinition: { definition: "" },
+                        smartStructureEnabled: false,
                       })
                     }
                   >

@@ -10,24 +10,24 @@
       "executor": "nx:run-commands",
       "continuous": true,
       "options": {
-        "command": "cargo tauri dev --no-watch",
-        "cwd": "{projectRoot}"
+        "cwd": "{workspaceRoot}",
+        "command": "node ./scripts/tauriw.mjs dev --no-watch"
       }
     },
     "build": {
       "dependsOn": ["retrom-client-web:build:desktop"],
       "executor": "nx:run-commands",
       "options": {
-        "command": "cargo tauri build",
-        "cwd": "{projectRoot}"
+        "cwd": "{workspaceRoot}",
+        "command": "node ./scripts/tauriw.mjs build"
       },
       "defaultConfiguration": "release",
       "configurations": {
         "release": {
-          "command": "cargo tauri build --config tauri.build.conf.json"
+          "command": "node ./scripts/tauriw.mjs build --config tauri.build.conf.json"
         },
         "debug": {
-          "command": "cargo tauri build --debug"
+          "command": "node ./scripts/tauriw.mjs build --debug"
         }
       }
     }

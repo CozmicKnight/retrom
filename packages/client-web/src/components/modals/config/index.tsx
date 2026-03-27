@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@retrom/ui/components/dialog";
+import { ScrollArea } from "@retrom/ui/components/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@retrom/ui/components/tabs";
 import { Route as RootRoute } from "@/routes/__root";
 import { useNavigate } from "@tanstack/react-router";
@@ -34,8 +35,8 @@ export function ConfigModal() {
         }
       }}
     >
-      <DialogContent className="gap-0 sm:w-inherit w-dvw">
-        <DialogHeader>
+      <DialogContent className="h-[92dvh] w-[calc(100dvw-1rem)] max-w-none gap-0 overflow-hidden p-0 sm:w-[min(80rem,calc(100dvw-3rem))]">
+        <DialogHeader className="mb-0 border-b px-6 pt-6 pb-4">
           <DialogTitle>Retrom Configuration</DialogTitle>
 
           <DialogDescription>
@@ -44,6 +45,7 @@ export function ConfigModal() {
         </DialogHeader>
 
         <Tabs
+          className="min-h-0 flex-1"
           value={configModal?.tab ?? "server"}
           onValueChange={(tab) => {
             navigate({
@@ -56,8 +58,8 @@ export function ConfigModal() {
           }}
           orientation="vertical"
         >
-          <div className="flex flex-col w-full">
-            <TabsList className="flex gap-2 h-fit w-full">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <TabsList className="mx-6 mt-4 flex h-fit gap-2">
               {Object.values(tabItems).map(({ value, name }) => (
                 <TabsTrigger
                   key={value}
@@ -69,10 +71,12 @@ export function ConfigModal() {
               ))}
             </TabsList>
 
-            <div className="py-4">
-              <ServerConfigTab />
-              <ClientConfigTab />
-            </div>
+            <ScrollArea className="min-h-0 flex-1 px-6 py-4">
+              <div className="w-full pr-4">
+                <ServerConfigTab />
+                <ClientConfigTab />
+              </div>
+            </ScrollArea>
           </div>
         </Tabs>
       </DialogContent>
