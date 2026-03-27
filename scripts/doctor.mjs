@@ -107,6 +107,13 @@ function linuxInstallCommand(tool) {
       openssl: "sudo dnf install openssl-devel",
       "pkg-config": "sudo dnf install pkgconf-pkg-config",
       corepack: "sudo dnf install nodejs24",
+      glib: "sudo dnf install glib2-devel",
+      gobject: "sudo dnf install glib2-devel",
+      gio: "sudo dnf install glib2-devel",
+      gtk3: "sudo dnf install gtk3-devel",
+      webkit2gtk: "sudo dnf install webkit2gtk4.1-devel",
+      javascriptcoregtk: "sudo dnf install javascriptcoregtk4.1-devel",
+      libsoup3: "sudo dnf install libsoup3-devel",
     };
 
     return commands[tool] ?? null;
@@ -120,6 +127,13 @@ function linuxInstallCommand(tool) {
       openssl: "sudo apt-get install libssl-dev",
       "pkg-config": "sudo apt-get install pkg-config",
       corepack: "sudo apt-get install nodejs npm",
+      glib: "sudo apt-get install libglib2.0-dev",
+      gobject: "sudo apt-get install libglib2.0-dev",
+      gio: "sudo apt-get install libglib2.0-dev",
+      gtk3: "sudo apt-get install libgtk-3-dev",
+      webkit2gtk: "sudo apt-get install libwebkit2gtk-4.1-dev",
+      javascriptcoregtk: "sudo apt-get install libjavascriptcoregtk-4.1-dev",
+      libsoup3: "sudo apt-get install libsoup-3.0-dev",
     };
 
     return commands[tool] ?? null;
@@ -133,6 +147,13 @@ function linuxInstallCommand(tool) {
       openssl: "sudo pacman -S openssl",
       "pkg-config": "sudo pacman -S pkgconf",
       corepack: "sudo pacman -S nodejs npm",
+      glib: "sudo pacman -S glib2",
+      gobject: "sudo pacman -S glib2",
+      gio: "sudo pacman -S glib2",
+      gtk3: "sudo pacman -S gtk3",
+      webkit2gtk: "sudo pacman -S webkit2gtk-4.1",
+      javascriptcoregtk: "sudo pacman -S webkit2gtk-4.1",
+      libsoup3: "sudo pacman -S libsoup3",
     };
 
     return commands[tool] ?? null;
@@ -145,6 +166,13 @@ function linuxInstallCommand(tool) {
     openssl: "Install OpenSSL development headers via your distro package manager",
     "pkg-config": "Install pkg-config via your distro package manager",
     corepack: "Install Node.js 24 and corepack via your distro package manager",
+    glib: "Install glib-2.0 development files via your distro package manager",
+    gobject: "Install gobject-2.0 development files via your distro package manager",
+    gio: "Install gio-2.0 development files via your distro package manager",
+    gtk3: "Install GTK 3 development files via your distro package manager",
+    webkit2gtk: "Install WebKitGTK 4.1 development files via your distro package manager",
+    javascriptcoregtk: "Install JavaScriptCoreGTK 4.1 development files via your distro package manager",
+    libsoup3: "Install libsoup3 development files via your distro package manager",
   };
 
   return commands[tool] ?? null;
@@ -428,6 +456,33 @@ function probeBinary(name, args = ["--version"]) {
   };
 }
 
+function probePkgConfigPackage(name, version = null) {
+  const pkgConfig = findExecutable("pkg-config");
+  if (!pkgConfig) {
+    return {
+      name,
+      ok: false,
+      output: "",
+      detail: "pkg-config is not available, so this system library could not be checked.",
+    };
+  }
+
+  const args = ["--exists", name];
+  if (version) {
+    args.push(`${name} >= ${version}`);
+  }
+
+  const result = run(pkgConfig, args);
+  return {
+    name,
+    ok: result.ok,
+    output: "",
+    detail: result.ok
+      ? `Detected \`${name}\` via pkg-config.`
+      : `The system library \`${name}\` was not found via pkg-config.`,
+  };
+}
+
 function probeDiskSpace() {
   if (typeof fs.statfsSync !== "function") {
     return null;
@@ -471,6 +526,13 @@ const perlCheck = probeBinary("perl");
 const opensslCheck = probeBinary("openssl");
 const cmakeCheck = probeBinary("cmake");
 const pkgConfigCheck = !isWindows ? probeBinary("pkg-config") : null;
+const glibCheck = isLinux ? probePkgConfigPackage("glib-2.0", "2.70") : null;
+const gobjectCheck = isLinux ? probePkgConfigPackage("gobject-2.0", "2.70") : null;
+const gioCheck = isLinux ? probePkgConfigPackage("gio-2.0", "2.70") : null;
+const gtk3Check = isLinux ? probePkgConfigPackage("gtk+-3.0") : null;
+const webkit2gtkCheck = isLinux ? probePkgConfigPackage("webkit2gtk-4.1") : null;
+const javascriptcoregtkCheck = isLinux ? probePkgConfigPackage("javascriptcoregtk-4.1") : null;
+const libsoup3Check = isLinux ? probePkgConfigPackage("libsoup-3.0") : null;
 const diskCheck = probeDiskSpace();
 const msvcCheck = isWindows ? probeMsvcBuildTools() : null;
 const webview2Check = isWindows ? probeWebView2Runtime() : null;
@@ -578,6 +640,72 @@ if (!isWindows) {
   });
 }
 
+if (isLinux) {
+  checks.push({
+    ...glibCheck,
+    name: "glib-2.0",
+    required: false,
+    detail: glibCheck.ok
+      ? glibCheck.detail
+      : "Missing. Linux desktop/workspace builds need GLib development files.",
+    fix: installCommand("glib"),
+  });
+  checks.push({
+    ...gobjectCheck,
+    name: "gobject-2.0",
+    required: false,
+    detail: gobjectCheck.ok
+      ? gobjectCheck.detail
+      : "Missing. Linux desktop/workspace builds need GObject development files.",
+    fix: installCommand("gobject"),
+  });
+  checks.push({
+    ...gioCheck,
+    name: "gio-2.0",
+    required: false,
+    detail: gioCheck.ok
+      ? gioCheck.detail
+      : "Missing. Linux desktop/workspace builds need GIO development files.",
+    fix: installCommand("gio"),
+  });
+  checks.push({
+    ...gtk3Check,
+    name: "gtk+-3.0",
+    required: false,
+    detail: gtk3Check.ok
+      ? gtk3Check.detail
+      : "Missing. Linux desktop/Tauri builds need GTK 3 development files.",
+    fix: installCommand("gtk3"),
+  });
+  checks.push({
+    ...webkit2gtkCheck,
+    name: "webkit2gtk-4.1",
+    required: false,
+    detail: webkit2gtkCheck.ok
+      ? webkit2gtkCheck.detail
+      : "Missing. Linux desktop/Tauri builds need WebKitGTK 4.1 development files.",
+    fix: installCommand("webkit2gtk"),
+  });
+  checks.push({
+    ...javascriptcoregtkCheck,
+    name: "javascriptcoregtk-4.1",
+    required: false,
+    detail: javascriptcoregtkCheck.ok
+      ? javascriptcoregtkCheck.detail
+      : "Missing. Linux desktop/Tauri builds need JavaScriptCoreGTK 4.1 development files.",
+    fix: installCommand("javascriptcoregtk"),
+  });
+  checks.push({
+    ...libsoup3Check,
+    name: "libsoup-3.0",
+    required: false,
+    detail: libsoup3Check.ok
+      ? libsoup3Check.detail
+      : "Missing. Linux desktop/Tauri builds need libsoup3 development files.",
+    fix: installCommand("libsoup3"),
+  });
+}
+
 if (diskCheck) {
   checks.push(diskCheck);
 }
@@ -662,4 +790,11 @@ if (isWindows) {
   console.log("- Desktop builds also need Microsoft C++ build tools and the WebView2 runtime.");
   console.log("- PostgreSQL is only needed when running the service without Docker and without `--features embedded_db`.");
   console.log("- Vendored OpenSSL may still need Perl and MSVC build tools.");
+}
+
+if (isLinux) {
+  console.log("");
+  console.log("Linux notes:");
+  console.log("- Full workspace and desktop/Tauri builds also need GLib, GTK, WebKitGTK, JavaScriptCoreGTK, and libsoup development packages.");
+  console.log("- Server-only builds can skip the desktop GUI packages.");
 }

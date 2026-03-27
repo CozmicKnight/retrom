@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
+import { buildToolEnv, resolveCorepackInvocation } from "./toolchain.mjs";
 
 const rootDir = process.cwd();
 const corepackHome = process.env.COREPACK_HOME ?? path.join(rootDir, ".corepack");
-const isWindows = process.platform === "win32";
 
 fs.mkdirSync(corepackHome, { recursive: true });
 
@@ -19,28 +19,22 @@ if (Number.isNaN(nodeMajor) || nodeMajor < 24) {
   fail(`Node ${process.versions.node} detected. Retrom requires Node 24 or newer.`);
 }
 
-const install = isWindows
-  ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "corepack", "pnpm", "install"], {
-      cwd: rootDir,
-      env: {
-        ...process.env,
-        COREPACK_HOME: corepackHome,
-      },
-      stdio: "inherit",
-      shell: false,
-    })
-  : spawnSync("corepack", ["pnpm", "install"], {
-      cwd: rootDir,
-      env: {
-        ...process.env,
-        COREPACK_HOME: corepackHome,
-      },
-      stdio: "inherit",
-      shell: false,
-    });
+const corepack = resolveCorepackInvocation("pnpm", "install");
+if (!corepack.ok) {
+  fail(corepack.message);
+}
+
+const install = spawnSync(corepack.command, corepack.args, {
+  cwd: rootDir,
+  env: buildToolEnv({
+    COREPACK_HOME: corepackHome,
+  }),
+  stdio: "inherit",
+  shell: false,
+});
 
 if (install.error) {
-  fail(`Failed to start corepack: ${install.error.message}`);
+  fail(`Failed to start corepack using ${corepack.source}: ${install.error.message}`);
 }
 
 if (install.status !== 0) {

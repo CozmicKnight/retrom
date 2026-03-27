@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -28,6 +29,7 @@ export function buildToolEnv(extra = {}) {
   const entries = pathEntries();
   const userProfile = process.env.USERPROFILE ?? "";
   const homeDir = process.env.HOME ?? userProfile;
+  const sudoUser = process.env.SUDO_USER ?? "";
   const windowsCargoDefaults =
     process.platform === "win32"
       ? {
@@ -35,9 +37,21 @@ export function buildToolEnv(extra = {}) {
           CARGO_INCREMENTAL: process.env.CARGO_INCREMENTAL ?? "0",
         }
       : {};
+  const sudoDefaults =
+    isRunningAsRootWithSudoUser()
+      ? {
+          NX_DAEMON: "false",
+          NX_WORKSPACE_DATA_DIRECTORY:
+            process.env.NX_WORKSPACE_DATA_DIRECTORY ??
+            path.join(os.tmpdir(), `retrom-nx-workspace-data-${sudoUser || "root"}`),
+        }
+      : {};
 
   withIfExists(entries, path.join(homeDir, ".cargo", "bin"));
   withIfExists(entries, path.join(userProfile, ".cargo", "bin"));
+  if (sudoUser) {
+    withIfExists(entries, path.join("/home", sudoUser, ".cargo", "bin"));
+  }
   withIfExists(entries, "C:\\Program Files\\CMake\\bin");
   withIfExists(entries, "C:\\Strawberry\\perl\\bin");
   withIfExists(entries, "C:\\Program Files\\Strawberry\\perl\\bin");
@@ -47,9 +61,36 @@ export function buildToolEnv(extra = {}) {
   return {
     ...process.env,
     ...windowsCargoDefaults,
+    ...sudoDefaults,
     ...extra,
     PATH: entries.join(path.delimiter),
     ...(protoc ? { PROTOC: protoc } : {}),
+  };
+}
+
+export function resolveExecutable(name, entries = pathEntries()) {
+  return findOnPath(name, entries);
+}
+
+export function resolveCorepackInvocation(...args) {
+  const preferredNode = resolvePreferredNode();
+  if (!preferredNode.ok) {
+    return preferredNode;
+  }
+
+  const corepack = resolveExecutable("corepack");
+  if (!corepack) {
+    return {
+      ok: false,
+      message: "Failed to find `corepack` on PATH.",
+    };
+  }
+
+  return {
+    ok: true,
+    command: preferredNode.command,
+    args: [corepack, ...args],
+    source: preferredNode.source,
   };
 }
 
@@ -116,6 +157,14 @@ export function resolvePreferredNode() {
 
 function nodeMajor(version) {
   return Number.parseInt(version.split(".")[0], 10);
+}
+
+function isRunningAsRootWithSudoUser() {
+  if (process.platform === "win32") {
+    return false;
+  }
+
+  return typeof process.getuid === "function" && process.getuid() === 0 && Boolean(process.env.SUDO_USER);
 }
 
 function probeVersion(command) {
