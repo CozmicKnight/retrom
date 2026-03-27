@@ -6,6 +6,8 @@ import { spawnSync } from "node:child_process";
 
 const rootDir = process.cwd();
 const isWindows = process.platform === "win32";
+const isMac = process.platform === "darwin";
+const isLinux = process.platform === "linux";
 const powerShellPath = path.join(
   process.env.SystemRoot ?? "C:\\Windows",
   "System32",
@@ -13,6 +15,140 @@ const powerShellPath = path.join(
   "v1.0",
   "powershell.exe",
 );
+const osRelease = isLinux ? readOsRelease() : {};
+
+function readOsRelease() {
+  try {
+    const contents = fs.readFileSync("/etc/os-release", "utf8");
+    return Object.fromEntries(
+      contents
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#") && line.includes("="))
+        .map((line) => {
+          const index = line.indexOf("=");
+          const key = line.slice(0, index);
+          const value = line.slice(index + 1).replace(/^"/, "").replace(/"$/, "");
+          return [key, value];
+        }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function linuxFamily() {
+  const ids = [osRelease.ID, ...(osRelease.ID_LIKE ?? "").split(" ")].filter(Boolean).map((value) => value.toLowerCase());
+  if (ids.includes("fedora") || ids.includes("rhel") || ids.includes("centos")) {
+    return "fedora";
+  }
+
+  if (ids.includes("debian") || ids.includes("ubuntu")) {
+    return "debian";
+  }
+
+  if (ids.includes("arch")) {
+    return "arch";
+  }
+
+  return "generic";
+}
+
+function installCommand(tool) {
+  if (isWindows) {
+    return windowsInstallCommand(tool);
+  }
+
+  if (isMac) {
+    return macInstallCommand(tool);
+  }
+
+  if (isLinux) {
+    return linuxInstallCommand(tool);
+  }
+
+  return null;
+}
+
+function windowsInstallCommand(tool) {
+  const commands = {
+    rustup: "winget install Rustlang.Rustup",
+    protoc: "winget install protobuf",
+    cmake: "winget install Kitware.CMake",
+    perl: "winget install StrawberryPerl.StrawberryPerl",
+    webview2: "winget install Microsoft.EdgeWebView2Runtime",
+    msvc: "winget install Microsoft.VisualStudio.2022.BuildTools",
+  };
+
+  return commands[tool] ?? null;
+}
+
+function macInstallCommand(tool) {
+  const commands = {
+    rustup: "brew install rustup-init && rustup-init",
+    protoc: "brew install protobuf",
+    cmake: "brew install cmake",
+    openssl: "brew install openssl",
+    "pkg-config": "brew install pkg-config",
+    corepack: "brew install node@24",
+  };
+
+  return commands[tool] ?? null;
+}
+
+function linuxInstallCommand(tool) {
+  const family = linuxFamily();
+
+  if (family === "fedora") {
+    const commands = {
+      rustup: "sudo dnf install rustup",
+      protoc: "sudo dnf install protobuf-compiler",
+      cmake: "sudo dnf install cmake",
+      openssl: "sudo dnf install openssl-devel",
+      "pkg-config": "sudo dnf install pkgconf-pkg-config",
+      corepack: "sudo dnf install nodejs24",
+    };
+
+    return commands[tool] ?? null;
+  }
+
+  if (family === "debian") {
+    const commands = {
+      rustup: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
+      protoc: "sudo apt-get install protobuf-compiler",
+      cmake: "sudo apt-get install cmake",
+      openssl: "sudo apt-get install libssl-dev",
+      "pkg-config": "sudo apt-get install pkg-config",
+      corepack: "sudo apt-get install nodejs npm",
+    };
+
+    return commands[tool] ?? null;
+  }
+
+  if (family === "arch") {
+    const commands = {
+      rustup: "sudo pacman -S rustup",
+      protoc: "sudo pacman -S protobuf",
+      cmake: "sudo pacman -S cmake",
+      openssl: "sudo pacman -S openssl",
+      "pkg-config": "sudo pacman -S pkgconf",
+      corepack: "sudo pacman -S nodejs npm",
+    };
+
+    return commands[tool] ?? null;
+  }
+
+  const commands = {
+    rustup: "Install rustup from https://rustup.rs/",
+    protoc: "Install protoc via your distro package manager",
+    cmake: "Install cmake via your distro package manager",
+    openssl: "Install OpenSSL development headers via your distro package manager",
+    "pkg-config": "Install pkg-config via your distro package manager",
+    corepack: "Install Node.js 24 and corepack via your distro package manager",
+  };
+
+  return commands[tool] ?? null;
+}
 
 function compareVersions(a, b) {
   const aParts = a.split(".").map(Number);
@@ -186,7 +322,7 @@ function probeMsvcBuildTools() {
     ok: false,
     output: "",
     detail: "Microsoft C++ build tools were not detected. Desktop builds need them.",
-    fix: "winget install Microsoft.VisualStudio.2022.BuildTools",
+    fix: installCommand("msvc"),
     manualFix: "Install Visual Studio 2022 Build Tools with the C++ workload, then reopen your shell.",
   };
 }
@@ -223,7 +359,7 @@ function probeWebView2Runtime() {
     ok: false,
     output: "",
     detail: "Microsoft Edge WebView2 runtime was not detected. Desktop builds and runtime need it.",
-    fix: "winget install Microsoft.EdgeWebView2Runtime",
+    fix: installCommand("webview2"),
     manualFix: "Install the Evergreen WebView2 Runtime from Microsoft.",
   };
 }
@@ -359,6 +495,7 @@ checks.push({
 checks.push({
   ...corepackCheck,
   required: true,
+  fix: installCommand("corepack"),
 });
 
 checks.push({
@@ -373,7 +510,7 @@ checks.push({
 checks.push({
   ...rustupCheck,
   required: true,
-  fix: "winget install Rustlang.Rustup",
+  fix: installCommand("rustup"),
   manualFix: "Install Rust using rustup from rust-lang.org, then reopen your shell.",
 });
 
@@ -392,8 +529,10 @@ checks.push({
   required: false,
   detail: protocCheck.ok
     ? `${protocCheck.detail}. Cargo builds will prefer this before falling back to a packaged protoc binary.`
-    : "Not on PATH. Cargo builds can fall back to a packaged protoc binary, but installing system protoc is usually faster and more reliable on Windows.",
-  fix: "winget install protobuf",
+    : isWindows
+      ? "Not on PATH. Cargo builds can fall back to a packaged protoc binary, but installing system protoc is usually faster and more reliable on Windows."
+      : "Not on PATH. Cargo builds can fall back to a packaged protoc binary, but a system protoc is usually faster and more reliable.",
+  fix: installCommand("protoc"),
   manualFix: "Download a prebuilt `protoc-*-win64.zip`, extract it, and add its `bin` directory to PATH.",
 });
 
@@ -403,6 +542,7 @@ checks.push({
   detail: opensslCheck.ok
     ? `${opensslCheck.detail}. Set OPENSSL_NO_VENDOR=1 to force the system install.`
     : "Not on PATH. Cargo will use vendored OpenSSL by default.",
+  fix: installCommand("openssl"),
 });
 
 checks.push({
@@ -411,7 +551,7 @@ checks.push({
   detail: cmakeCheck.ok
     ? cmakeCheck.detail
     : "Not on PATH. Some vendored/native Rust dependencies still rely on CMake during source builds.",
-  fix: "winget install Kitware.CMake",
+  fix: installCommand("cmake"),
   manualFix: "Install CMake from Kitware and reopen your shell.",
 });
 
@@ -422,7 +562,7 @@ if (isWindows) {
     detail: perlCheck.ok
       ? `${perlCheck.detail}. Vendored OpenSSL should be able to build if MSVC tools are also installed.`
       : "Not on PATH. Vendored OpenSSL on Windows often needs Perl; Strawberry Perl is the usual fix.",
-    fix: "winget install StrawberryPerl.StrawberryPerl",
+    fix: installCommand("perl"),
     manualFix: "Install Strawberry Perl and reopen your shell.",
   });
 }
@@ -434,6 +574,7 @@ if (!isWindows) {
     detail: pkgConfigCheck.ok
       ? pkgConfigCheck.detail
       : "Missing. Non-Windows native builds may still need pkg-config and OpenSSL development headers.",
+    fix: installCommand("pkg-config"),
   });
 }
 

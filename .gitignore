@@ -4,14 +4,23 @@ mock.db
 .env
 config_dev
 config.dev.*
+.corepack/
+.pnpm-store/
 
 **/node_modules
 **/rustc-ice*
 
 *.bak
 *.tsbuildinfo
+.DS_Store
+Thumbs.db
+Desktop.ini
 .lazy.lua
 .turbo
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 **/dist
 retrom*.log
 

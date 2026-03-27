@@ -248,6 +248,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "retrom.ContentDirectory.storage_type",
             "#[serde(deserialize_with = \"crate::storage_type::deserialize\", \
                 alias = \"storage_type\", alias = \"storageType\")]",
+        )
+        .field_attribute(
+            "retrom.ContentDirectory.smart_structure_enabled",
+            "#[serde(default, alias = \"smart_structure_enabled\", alias = \"smartStructureEnabled\")]",
+        )
+        .field_attribute(
+            "retrom.MetadataConfig.smart_structure_enabled",
+            "#[serde(default, alias = \"smart_structure_enabled\", alias = \"smartStructureEnabled\")]",
         );
 
     for (model_name, table_name, primary_key, belongs_to) in queryable_models.into_iter() {
